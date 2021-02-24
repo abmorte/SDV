@@ -142,6 +142,18 @@ class BaseTabularModel:
         else:
             return pd.DataFrame(index=range(num_to_sample))
 
+    def _sampling_and_filtering_rows(self, num_to_sample, conditions, sampled=None):
+        if sampled is None:
+            sampled = pd.DataFrame()
+
+        resampled = self._sample_rows(num_to_sample, conditions)
+        resampled = self._metadata.reverse_transform(resampled)
+        sampled = sampled.append(resampled)
+        sampled = self._metadata.filter_valid(sampled)
+        num_valid = len(sampled)
+
+        return num_valid, sampled
+
     def _sample_conditioned_rows(self, num_rows=None, max_retries=100, conditions=None):
         """Sample rows from this table.
 
@@ -171,10 +183,7 @@ class BaseTabularModel:
             num_rows = self._num_rows
 
         num_to_sample = num_rows
-        sampled = self._sample_rows(num_to_sample, conditions)
-        sampled = self._metadata.reverse_transform(sampled)
-        sampled = self._metadata.filter_valid(sampled)
-        num_valid = len(sampled)
+        num_valid, sampled = self._sampling_and_filtering_rows(num_to_sample, conditions)
 
         counter = 0
         total_sampled = num_to_sample
@@ -184,16 +193,12 @@ class BaseTabularModel:
                 raise ValueError('Could not get enough valid rows within %s trials', max_retries)
 
             remaining = num_rows - num_valid
-            valid_ratio = num_valid / total_sampled
-            num_to_sample = int(counter * remaining / (valid_ratio if valid_ratio != 0 else 1))
+            probability_valid = (num_valid + 1.0) / (total_sampled + 1.0)
+            num_to_sample = max(int(remaining / probability_valid), num_rows)
+            total_sampled += num_to_sample
 
             LOGGER.info('%s valid rows remaining. Resampling %s rows', remaining, num_to_sample)
-            resampled = self._sample_rows(num_to_sample, conditions)
-            resampled = self._metadata.reverse_transform(resampled)
-
-            sampled = sampled.append(resampled)
-            sampled = self._metadata.filter_valid(sampled)
-            num_valid = len(sampled)
+            num_valid, sampled = self._sampling_and_filtering_rows(num_to_sample, conditions, sampled)
 
         return sampled.head(num_rows)
 
