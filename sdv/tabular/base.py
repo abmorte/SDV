@@ -198,7 +198,8 @@ class BaseTabularModel:
             total_sampled += num_to_sample
 
             LOGGER.info('%s valid rows remaining. Resampling %s rows', remaining, num_to_sample)
-            num_valid, sampled = self._sampling_and_filtering_rows(num_to_sample, conditions, sampled)
+            num_valid, sampled = self._sampling_and_filtering_rows(num_to_sample, conditions,
+                                                                   sampled)
 
         return sampled.head(num_rows)
 
